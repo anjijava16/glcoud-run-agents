@@ -16,10 +16,10 @@ class FakeToolContext:
 @pytest.fixture(autouse=True)
 def db(tmp_path, monkeypatch):
     monkeypatch.setenv("RETAIL_DB_PATH", str(tmp_path / "retail.db"))
-    from oldapp.core.config import get_settings
+    from app.core.config import get_settings
 
     get_settings.cache_clear()
-    from oldapp.data.seed import seed_if_empty
+    from app.data.seed import seed_if_empty
 
     seed_if_empty()
     yield
@@ -27,7 +27,7 @@ def db(tmp_path, monkeypatch):
 
 
 def test_search_and_filters():
-    from oldapp.tools.catalog_tools import search_products
+    from app.tools.catalog_tools import search_products
 
     res = search_products("headphones")
     assert res["status"] == "success" and res["products"][0]["sku"] == "ELEC-1001"
@@ -37,14 +37,14 @@ def test_search_and_filters():
 
 
 def test_inventory_labels():
-    from oldapp.tools.catalog_tools import check_inventory
+    from app.tools.catalog_tools import check_inventory
 
     assert check_inventory("ELEC-1004")["availability"] == "out_of_stock"
     assert check_inventory("ELEC-1003")["availability"] == "low_stock"
 
 
 def test_orders_are_scoped_to_customer():
-    from oldapp.tools.order_tools import get_order_status, list_my_orders
+    from app.tools.order_tools import get_order_status, list_my_orders
 
     assert {o["order_id"] for o in list_my_orders(FakeToolContext())["orders"]} == {"ORD-10001", "ORD-10002", "ORD-10003"}
     # CUST-002 must not see CUST-001's order
@@ -53,8 +53,8 @@ def test_orders_are_scoped_to_customer():
 
 
 def test_place_and_cancel_order_updates_stock():
-    from oldapp.tools.catalog_tools import check_inventory
-    from oldapp.tools.order_tools import cancel_order, place_order
+    from app.tools.catalog_tools import check_inventory
+    from app.tools.order_tools import cancel_order, place_order
 
     ctx = FakeToolContext()
     before = check_inventory("HOME-2001")["units_available"]
@@ -67,14 +67,14 @@ def test_place_and_cancel_order_updates_stock():
 
 
 def test_cannot_oversell_or_cancel_shipped():
-    from oldapp.tools.order_tools import cancel_order, place_order
+    from app.tools.order_tools import cancel_order, place_order
 
     assert place_order("ELEC-1004", 1, FakeToolContext())["status"] == "error"  # out of stock
     assert cancel_order("ORD-10002", FakeToolContext())["status"] == "error"  # already shipped
 
 
 def test_returns_window_and_human_review():
-    from oldapp.tools.returns_tools import check_return_eligibility, initiate_return
+    from app.tools.returns_tools import check_return_eligibility, initiate_return
 
     ctx = FakeToolContext()
     assert check_return_eligibility("ORD-10001", ctx)["eligible"] is True
@@ -89,7 +89,7 @@ def test_returns_window_and_human_review():
 
 
 def test_policy_lookup():
-    from oldapp.tools.policy_tools import get_store_policy
+    from app.tools.policy_tools import get_store_policy
 
     assert get_store_policy("Price Match")["status"] == "success"
     assert "available_topics" in get_store_policy("nonsense")
