@@ -1,0 +1,7 @@
+# Runtime dependencies (pinned for reproducible Cloud Run builds)
+google-adk[db]==2.11.0        # agents, runners, DatabaseSessionService (SQLAlchemy)
+litellm==1.105.0              # OpenRouter access via ADK's LiteLlm wrapper
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+pydantic-settings==2.15.0
+aiosqlite==0.22.1             # async SQLite driver used by the session DB URL

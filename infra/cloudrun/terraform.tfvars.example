@@ -1,0 +1,12 @@
+# Only needed for running terraform by hand. CD passes these with -var flags.
+project_id              = "my-gcp-project-id"
+region                  = "us-central1"
+service_name            = "retail-adk-agents"
+image                   = "us-central1-docker.pkg.dev/my-gcp-project-id/retail-agents/retail-adk-agents:manual"
+runtime_service_account = "retail-adk-agents-run@my-gcp-project-id.iam.gserviceaccount.com"
+app_env                 = "prod"
+root_model              = "openrouter/openai/gpt-4o-mini"
+specialist_model        = "openrouter/openai/gpt-4o-mini"
+app_api_key_secret_id   = "" # "retail-app-api-key" to require X-API-Key
+allow_unauthenticated   = true
+max_instances           = 1

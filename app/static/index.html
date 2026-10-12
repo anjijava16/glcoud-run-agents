@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Northwind Market Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="logo">N</span>
+        <div>
+          <div class="brand-name">Northwind Market</div>
+          <div class="brand-sub">Shopping assistant</div>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Signed in as</span>
+        <select id="customer"></select>
+      </label>
+
+      <button class="btn-new" id="newChat">+ New chat</button>
+
+      <div class="section-title">Recent chats</div>
+      <ul class="sessions" id="sessions"></ul>
+
+      <div class="sidebar-foot">
+        <a href="/docs" target="_blank">API docs</a> ·
+        <a href="/readyz" target="_blank">Status</a>
+      </div>
+    </aside>
+
+    <main class="chat">
+      <header class="chat-head">
+        <button class="icon-btn" id="toggleSidebar" aria-label="Menu">☰</button>
+        <div class="chat-title" id="chatTitle">New conversation</div>
+        <label class="trace-toggle"><input type="checkbox" id="showTrace" checked /> Show agent steps</label>
+      </header>
+
+      <section class="messages" id="messages">
+        <div class="empty" id="empty">
+          <h1>How can I help you shop today?</h1>
+          <div class="suggestions">
+            <button data-q="Show me noise-cancelling headphones under $300">Headphones under $300</button>
+            <button data-q="Where is my latest order?">Where is my latest order?</button>
+            <button data-q="Can I return the headphones from order ORD-10001?">Return an item</button>
+            <button data-q="What is your shipping policy?">Shipping policy</button>
+          </div>
+        </div>
+      </section>
+
+      <form class="composer" id="composer">
+        <textarea id="input" rows="1" placeholder="Ask about products, orders, returns…" maxlength="4000"></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
