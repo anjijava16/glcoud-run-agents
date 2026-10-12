@@ -127,9 +127,9 @@ resource "google_service_account" "deployer" {
 
 resource "google_project_iam_member" "deployer_roles" {
   for_each = toset([
-    "roles/run.admin",                  # create/update the Cloud Run service + its IAM
-    "roles/artifactregistry.writer",    # push images
-    "roles/secretmanager.viewer",       # read secret metadata during plan
+    "roles/run.admin",               # create/update the Cloud Run service + its IAM
+    "roles/artifactregistry.writer", # push images
+    "roles/secretmanager.viewer",    # read secret metadata during plan
     "roles/serviceusage.serviceUsageConsumer",
   ])
   project = var.project_id
