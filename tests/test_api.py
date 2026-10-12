@@ -92,7 +92,7 @@ def test_data_endpoints(client):
 
 
 def test_llm_provider_error_maps_to_502(client, monkeypatch):
-    from app.services import agent_service
+    from oldapp.services import agent_service
 
     class FakeLiteLlmError(Exception):
         pass
