@@ -1,0 +1,179 @@
+# CD: on every push to main (or manual run) ->
+#   1. run the full CI suite (reused from ci.yml)
+#   2. auth to GCP with Workload Identity Federation (no JSON keys)
+#   3. build + push the image to Artifact Registry, tagged with the commit SHA
+#   4. terraform apply infra/cloudrun with that image
+#   5. smoke-test the live URL
+#
+# Required GitHub repository VARIABLES (Settings -> Secrets and variables -> Actions -> Variables):
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WIF_PROVIDER, GCP_DEPLOYER_SA, GCP_RUNTIME_SA,
+#   TF_STATE_BUCKET, GAR_REPOSITORY
+# Optional variables: SERVICE_NAME, ROOT_MODEL, SPECIALIST_MODEL, REQUIRE_API_KEY ("true"/"false")
+# No GitHub SECRETS are needed with WIF. The OpenRouter key lives in GCP Secret Manager.
+#
+# Optional Docker Hub publishing (same image, pushed to both registries):
+#   variable DOCKERHUB_REPO      e.g. anjaiahspr/retail-adk-agents   (empty = skip Docker Hub)
+#   secret   DOCKERHUB_USERNAME  e.g. anjaiahspr
+#   secret   DOCKERHUB_TOKEN     a Docker Hub access token (not your password)
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required to mint the OIDC token that WIF exchanges
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false # never cancel a deploy half-way through terraform apply
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  SERVICE: ${{ vars.SERVICE_NAME || 'retail-adk-agents' }}
+  GAR_REPO: ${{ vars.GAR_REPOSITORY || 'retail-agents' }}
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Build, push & deploy to Cloud Run
+    needs: ci
+    runs-on: ubuntu-latest
+    environment:
+      name: production # add required reviewers on this environment for manual approval
+      url: ${{ steps.out.outputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check required variables
+        run: |
+          missing=0
+          for v in GCP_PROJECT_ID GCP_WIF_PROVIDER GCP_DEPLOYER_SA GCP_RUNTIME_SA TF_STATE_BUCKET; do
+            if [ -z "${!v}" ]; then echo "::error::Repository variable $v is not set"; missing=1; fi
+          done
+          exit $missing
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_DEPLOYER_SA: ${{ vars.GCP_DEPLOYER_SA }}
+          GCP_RUNTIME_SA: ${{ vars.GCP_RUNTIME_SA }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+
+      - id: auth
+        name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+          # Fallback if you can't use WIF (not recommended): remove the two lines above and use
+          # credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Compute image name
+        id: img
+        run: |
+          base="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${SERVICE}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "ref=$base:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          # All tags for this build, one per line. Docker Hub tags only when DOCKERHUB_REPO is set.
+          {
+            echo "tags<<EOF"
+            echo "$base:${GITHUB_SHA::12}"
+            echo "$base:latest"
+            if [ -n "$DOCKERHUB_REPO" ]; then
+              echo "docker.io/$DOCKERHUB_REPO:${GITHUB_SHA::12}"
+              echo "docker.io/$DOCKERHUB_REPO:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO }}
+
+      - name: Log in to Docker Hub
+        if: ${{ vars.DOCKERHUB_REPO != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image (Artifact Registry + optional Docker Hub)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64 # Cloud Run runs amd64
+          push: true
+          tags: ${{ steps.img.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+          terraform_wrapper: false # so `terraform output -raw` prints clean values
+
+      - name: Terraform init
+        working-directory: infra/cloudrun
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: Terraform plan
+        working-directory: infra/cloudrun
+        run: |
+          terraform plan -input=false -out=tfplan \
+            -var="project_id=${PROJECT_ID}" \
+            -var="region=${REGION}" \
+            -var="service_name=${SERVICE}" \
+            -var="image=${{ steps.img.outputs.ref }}" \
+            -var="runtime_service_account=${{ vars.GCP_RUNTIME_SA }}" \
+            -var="root_model=${{ vars.ROOT_MODEL || 'openrouter/openai/gpt-4o-mini' }}" \
+            -var="specialist_model=${{ vars.SPECIALIST_MODEL || 'openrouter/openai/gpt-4o-mini' }}" \
+            -var="app_api_key_secret_id=${{ vars.REQUIRE_API_KEY == 'true' && 'retail-app-api-key' || '' }}"
+
+      - name: Terraform apply
+        working-directory: infra/cloudrun
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - id: out
+        name: Read service URL
+        working-directory: infra/cloudrun
+        run: echo "url=$(terraform output -raw service_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        run: |
+          url="${{ steps.out.outputs.url }}"
+          for i in $(seq 1 20); do
+            if curl -fsS "$url/healthz"; then
+              echo
+              curl -fsS "$url/readyz" || { echo "::error::/readyz failed"; exit 1; }
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Service did not become healthy"
+          exit 1
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "### Deployment"
+            echo "- Service: \`${SERVICE}\` in \`${REGION}\`"
+            echo "- Image: \`${{ steps.img.outputs.ref }}\`"
+            if [ -n "${{ vars.DOCKERHUB_REPO }}" ]; then
+              echo "- Docker Hub: \`docker pull ${{ vars.DOCKERHUB_REPO }}:${GITHUB_SHA::12}\`"
+            fi
+            echo "- URL: ${{ steps.out.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
