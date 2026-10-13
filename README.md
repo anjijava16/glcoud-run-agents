@@ -29,6 +29,8 @@ The README goes from the bird's-eye view down to the details. Read the first two
 
 ---
 
+
+
 ## Level 0 — The bird's-eye view
 
 One container. Inside it, FastAPI serves both the chat page and the API. The API hands each message to Google ADK, which runs a small tree of agents. The agents think with a model from OpenRouter (any model that supports tool calling) and act through Python tools that read and write the store's database. ADK keeps every conversation in a session database so the agent remembers the thread.
