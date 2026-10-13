@@ -16,7 +16,7 @@ PROJECT_ID="project-52e8c95d-822f-4563-a7e"
 ACCOUNT="mamathaanjireddy@gmail.com"
 REGION="us-central1"
 GITHUB_REPO="anjijava16/glcoud-run-agents"   # owner/name, exactly as on GitHub (case matters)
-GITHUB_BRANCH="main"
+GITHUB_BRANCH="develop"                       # branch that deploys (must match cd.yml)
 SERVICE="glcoud-run-agents"                   # Cloud Run service + image name (lowercase, <= 49 chars)
 GAR_REPO="retail-agents"
 # Runtime service account id: 6-30 chars, lowercase letters/digits/hyphens.
