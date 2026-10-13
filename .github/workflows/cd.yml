@@ -1,4 +1,4 @@
-# CD: on every push to main (or manual run) ->
+# CD: on every push to develop (or manual run from develop) ->
 #   1. run the full CI suite (reused from ci.yml)
 #   2. auth to GCP with Workload Identity Federation (no JSON keys)
 #   3. build + push the image to Artifact Registry, tagged with the commit SHA
@@ -19,8 +19,8 @@ name: CD
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [develop] # must match GITHUB_BRANCH in scripts/gcp-setup.sh (GCP only trusts this branch)
+  workflow_dispatch: # run it from the develop branch; other branches are rejected by GCP
 
 permissions:
   contents: read
@@ -138,8 +138,8 @@ jobs:
             -var="service_name=${SERVICE}" \
             -var="image=${{ steps.img.outputs.ref }}" \
             -var="runtime_service_account=${{ vars.GCP_RUNTIME_SA }}" \
-            -var="root_model=${{ vars.ROOT_MODEL || 'openrouter/openai/gpt-4o-mini' }}" \
-            -var="specialist_model=${{ vars.SPECIALIST_MODEL || 'openrouter/openai/gpt-4o-mini' }}" \
+            -var="root_model=${{ vars.ROOT_MODEL || 'openrouter/meta-llama/llama-3.3-70b-instruct' }}" \
+            -var="specialist_model=${{ vars.SPECIALIST_MODEL || 'openrouter/mistralai/mistral-nemo' }}" \
             -var="app_api_key_secret_id=${{ vars.REQUIRE_API_KEY == 'true' && 'retail-app-api-key' || '' }}"
 
       - name: Terraform apply

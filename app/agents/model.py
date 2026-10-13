@@ -41,4 +41,8 @@ def build_model(role: str = "specialist") -> BaseLlm:
         num_retries=2,
         # OpenRouter uses these for attribution/rankings; harmless otherwise.
         extra_headers={"HTTP-Referer": "https://github.com/retail-adk-agents", "X-Title": s.app_name},
+        # OpenRouter serves open models (Llama, Mistral...) through several providers, and not
+        # all of them support tool calling. This makes OpenRouter only pick providers that
+        # support every parameter we send - including `tools` - so agent transfers don't fail.
+        extra_body={"provider": {"require_parameters": True}},
     )

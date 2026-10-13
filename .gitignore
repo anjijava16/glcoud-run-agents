@@ -14,3 +14,5 @@ venv/
 !*.tfvars.example
 .terraform.lock.hcl.bak
 crash.log
+.DS_Store
+.gcp-setup.env
