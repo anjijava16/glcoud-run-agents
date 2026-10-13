@@ -29,12 +29,12 @@ variable "app_env" {
 
 variable "root_model" {
   type    = string
-  default = "openrouter/openai/gpt-4o-mini"
+  default = "openrouter/meta-llama/llama-3.3-70b-instruct"
 }
 
 variable "specialist_model" {
   type    = string
-  default = "openrouter/openai/gpt-4o-mini"
+  default = "openrouter/mistralai/mistral-nemo"
 }
 
 variable "openrouter_secret_id" {

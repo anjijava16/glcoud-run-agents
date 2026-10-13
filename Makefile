@@ -1,7 +1,7 @@
 .PHONY: install run test lint fmt docker-build docker-run dockerhub-push tf-fmt tf-validate
 
-# Docker Hub repo for manual pushes:  make dockerhub-push DOCKERHUB_REPO=anjaiahspr/retail-adk-agents
-DOCKERHUB_REPO ?= anjaiahspr/retail-adk-agents
+# Docker Hub repo for manual pushes:  make dockerhub-push DOCKERHUB_REPO=anjaiahspr/glcoud-run-agents
+DOCKERHUB_REPO ?= anjaiahspr/glcoud-run-agents
 TAG ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 install:

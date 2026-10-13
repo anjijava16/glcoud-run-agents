@@ -1,4 +1,9 @@
-"""Liveness/readiness. Cloud Run startup + liveness probes hit these (see Terraform)."""
+"""Liveness/readiness.
+
+Use /health and /ready from outside. Cloud Run reserves URL paths ending in "z"
+(/healthz, /readyz, ...) on its public *.run.app URLs and answers them itself with a
+404, so those only work locally or from inside the container. They're kept as aliases.
+"""
 
 from __future__ import annotations
 
@@ -13,14 +18,16 @@ from app.services.agent_service import AgentService
 router = APIRouter(tags=["health"])
 
 
-@router.get("/healthz")
-async def healthz():
+@router.get("/health")
+@router.get("/healthz", include_in_schema=False)
+async def health():
     s = get_settings()
     return {"status": "ok", "app": s.app_name, "version": s.app_version, "env": s.app_env}
 
 
-@router.get("/readyz")
-async def readyz(svc: AgentService = Depends(get_agent_service)):
+@router.get("/ready")
+@router.get("/readyz", include_in_schema=False)
+async def ready(svc: AgentService = Depends(get_agent_service)):
     checks = {}
     try:
         with get_conn() as conn:

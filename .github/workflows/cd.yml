@@ -152,12 +152,13 @@ jobs:
         run: echo "url=$(terraform output -raw service_url)" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test
+        # /health and /ready, not /healthz: Cloud Run reserves paths ending in "z" on run.app URLs.
         run: |
           url="${{ steps.out.outputs.url }}"
           for i in $(seq 1 20); do
-            if curl -fsS "$url/healthz"; then
+            if curl -fsS "$url/health"; then
               echo
-              curl -fsS "$url/readyz" || { echo "::error::/readyz failed"; exit 1; }
+              curl -fsS "$url/ready" || { echo "::error::/ready failed"; exit 1; }
               exit 0
             fi
             sleep 5

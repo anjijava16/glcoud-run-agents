@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_api_base: str = "https://openrouter.ai/api/v1"
     # LiteLLM model strings. The "openrouter/" prefix tells LiteLLM which provider to use.
-    root_model: str = "openrouter/openai/gpt-4o-mini"
-    specialist_model: str = "openrouter/openai/gpt-4o-mini"
+    root_model: str = "openrouter/meta-llama/llama-3.3-70b-instruct"
+    specialist_model: str = "openrouter/mistralai/mistral-nemo"
     llm_temperature: float = 0.2
     llm_max_tokens: int = 1024
     llm_timeout_s: int = 60

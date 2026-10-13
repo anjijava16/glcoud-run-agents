@@ -7,6 +7,15 @@ import json
 USER = "test-user"
 
 
+def test_health_paths_avoid_cloud_run_reserved_z_suffix(client):
+    # Cloud Run's front end swallows paths ending in "z" on run.app URLs, so the
+    # externally used routes must not end in z; the z-aliases stay for local use.
+    for path in ("/health", "/ready", "/healthz", "/readyz"):
+        assert client.get(path).status_code == 200, path
+    assert "/health" in client.get("/openapi.json").json()["paths"]
+    assert "/healthz" not in client.get("/openapi.json").json()["paths"]
+
+
 def test_health_and_ready(client):
     assert client.get("/healthz").json()["status"] == "ok"
     r = client.get("/readyz")

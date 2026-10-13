@@ -29,8 +29,6 @@ The README goes from the bird's-eye view down to the details. Read the first two
 
 ---
 
-
-
 ## Level 0 — The bird's-eye view
 
 One container. Inside it, FastAPI serves both the chat page and the API. The API hands each message to Google ADK, which runs a small tree of agents. The agents think with a model from OpenRouter (any model that supports tool calling) and act through Python tools that read and write the store's database. ADK keeps every conversation in a session database so the agent remembers the thread.
@@ -120,7 +118,7 @@ retail-adk-agents/
 │   │   ├── agents.py            # /api/v1/agents/{agent}/chat[/stream] (direct specialist)
 │   │   ├── sessions.py          # /api/v1/sessions CRUD + history
 │   │   ├── catalog.py           # plain data APIs (no LLM)
-│   │   └── health.py            # /healthz, /readyz
+│   │   └── health.py            # /health, /ready
 │   ├── data/
 │   │   ├── db.py                # SQLite schema + connection helper
 │   │   └── seed.py              # demo products, customers, orders
@@ -290,8 +288,8 @@ Interactive docs are at `/docs` (Swagger) and `/redoc` once the app is running.
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/` | Chat UI |
-| GET | `/healthz` | Liveness. Always cheap. Used by Cloud Run probes |
-| GET | `/readyz` | Checks both databases; reports whether an LLM key is configured |
+| GET | `/health` | Liveness. Always cheap. Used by Cloud Run probes. (`/healthz` also works locally, but Cloud Run reserves paths ending in `z` on public URLs, so use `/health` from outside) |
+| GET | `/ready` | Checks both databases; reports whether an LLM key is configured |
 | POST | `/api/v1/chat` | One turn with the coordinator, JSON response |
 | POST | `/api/v1/chat/stream` | Same, as Server-Sent Events |
 | GET | `/api/v1/agents` | Lists agents, their tools and sub-agents |
@@ -460,7 +458,7 @@ Notable Cloud Run settings in `infra/cloudrun/main.tf`:
 - `max_instance_request_concurrency = 40`: agent calls spend most of their time waiting on the model, so one instance handles many at once.
 - `session_affinity = true` and `max_instances = 1` by default because of SQLite (see Level 4).
 - `cpu_idle = true` (pay only while handling requests) and `startup_cpu_boost = true` (faster cold starts).
-- Startup and liveness probes on `/healthz`.
+- Startup and liveness probes on `/health`.
 - `OPENROUTER_API_KEY` (and optionally `APP_API_KEY`) come from Secret Manager with `version = "latest"`.
 
 ---
@@ -474,14 +472,14 @@ flowchart LR
     subgraph CI["ci.yml · every PR and non-main push"]
         L[ruff lint + format] --> P[pytest]
         TV[terraform fmt + validate]
-        P --> D[docker build + boot /healthz]
+        P --> D[docker build + boot /health]
     end
     subgraph CD["cd.yml · push to main / manual"]
         G[reuse ci.yml as gate] --> A[auth via WIF]
         A --> BP[build + push image :sha]
         BP --> TI[terraform init GCS backend]
         TI --> TP[plan] --> TA[apply]
-        TA --> SM[smoke test /healthz + /readyz]
+        TA --> SM[smoke test /health + /ready]
     end
 ```
 
@@ -493,6 +491,10 @@ CI needs no secrets at all. CD needs no GitHub *secrets* either, only repository
 - `gcloud` CLI and Terraform ≥ 1.6 on your machine.
 - A GitHub repository for this code.
 - An OpenRouter API key.
+
+### Shortcut: do Steps 2–5 with two scripts
+
+If you'd rather not use Terraform for the one-time setup, `scripts/gcp-setup.sh` creates the same resources with `gcloud` (APIs, state bucket, Artifact Registry, secrets, service accounts, WIF) and prints your variable values. `scripts/github-setup.sh` then writes them into GitHub with the `gh` CLI. Edit the variables at the top of `gcp-setup.sh` first. Use the scripts **or** `infra/bootstrap`, not both.
 
 ### Step 1 — Push the code to GitHub
 
@@ -569,13 +571,13 @@ The deploy job runs in a GitHub environment called `production`. Under **Setting
 
 ### Step 7 — Deploy
 
-Push anything to `main`, or go to **Actions → CD → Run workflow**. The run will:
+Push anything to `develop` (the deploy branch; set by `GITHUB_BRANCH` in `scripts/gcp-setup.sh` and `on.push.branches` in `cd.yml`), or go to **Actions → CD → Run workflow**. The run will:
 
 1. Run the whole CI workflow as a gate.
 2. Authenticate to GCP as `github-deployer` via WIF.
 3. Build the image and push `REGION-docker.pkg.dev/PROJECT/retail-agents/retail-adk-agents:<12-char sha>` and `:latest`.
 4. `terraform init` against the state bucket, `plan`, `apply` with the new image.
-5. Curl `/healthz` and `/readyz` on the new URL until they pass.
+5. Curl `/health` and `/ready` on the new URL until they pass.
 
 The service URL shows up on the run's summary page and on the `production` environment.
 
@@ -583,7 +585,7 @@ The service URL shows up on the run's summary page and on the `production` envir
 
 ```bash
 URL=$(gcloud run services describe retail-adk-agents --region us-central1 --format='value(status.url)')
-curl $URL/readyz
+curl $URL/ready
 open $URL      # the chat UI
 ```
 
@@ -676,7 +678,7 @@ All settings are environment variables (or `.env` locally). Defined in `app/core
 | `RETAIL_DB_PATH` | `./data/retail.db` | |
 | `SEED_DEMO_DATA` | `true` | Seed if the DB is empty |
 | `APP_API_KEY` | empty | If set, `/api/v1/*` requires `X-API-Key` |
-| `APP_ENV` | `local` | Shown in `/healthz` |
+| `APP_ENV` | `local` | Shown in `/health` |
 | `LOG_LEVEL` | `INFO` | |
 | `LOG_JSON` | `true` | `false` for readable local logs |
 | `CORS_ORIGINS` | `["*"]` | JSON list |
@@ -689,7 +691,7 @@ All settings are environment variables (or `.env` locally). Defined in `app/core
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Chat returns **502** "LLM provider error" | Bad or missing `OPENROUTER_API_KEY`, no credit on the key, or a model id that doesn't exist. Check `/readyz` → `llm_key_configured`, and the logs for the LiteLLM error |
+| Chat returns **502** "LLM provider error" | Bad or missing `OPENROUTER_API_KEY`, no credit on the key, or a model id that doesn't exist. Check `/ready` → `llm_key_configured`, and the logs for the LiteLLM error |
 | The agent replies but never uses tools | The model doesn't support tool calling well. Try `openai/gpt-4o-mini`, `anthropic/claude-*` or `google/gemini-2.5-flash` on OpenRouter |
 | Wrong specialist picked | Tighten the sub-agent `description`s in `specialists.py` and the routing list in `prompts.ROOT`, or use a stronger `ROOT_MODEL` |
 | Chat history disappears on Cloud Run | The instance was recycled and SQLite went with it. Expected with SQLite; move sessions to Postgres (Level 9) |
@@ -697,7 +699,7 @@ All settings are environment variables (or `.env` locally). Defined in `app/core
 | CD fails at terraform with `iam.serviceAccounts.actAs` | The deployer is missing `serviceAccountUser` on the runtime SA; re-apply bootstrap |
 | Terraform: `allUsers` binding rejected | Your org enforces Domain Restricted Sharing. Set `allow_unauthenticated = false` and front the service with IAP |
 | Cloud Run revision fails to start: secret not found / no versions | Step 4 wasn't done; add a version to both secrets |
-| `/readyz` 503 | One of the databases isn't reachable; the `checks` field says which |
+| `/ready` 503 | One of the databases isn't reachable; the `checks` field says which |
 | Streaming stalls behind a corporate proxy | Some proxies buffer SSE. The app sets `X-Accel-Buffering: no`; use the JSON endpoint if your proxy still buffers |
 
 ---

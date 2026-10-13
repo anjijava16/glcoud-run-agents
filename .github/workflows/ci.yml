@@ -84,11 +84,11 @@ jobs:
           tags: retail-adk-agents:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Container boots and answers /healthz
+      - name: Container boots and answers /health
         run: |
           docker run -d --name app -p 8080:8080 retail-adk-agents:ci
           for i in $(seq 1 30); do
-            curl -fsS http://localhost:8080/healthz && exit 0
+            curl -fsS http://localhost:8080/health && exit 0
             sleep 1
           done
           docker logs app
