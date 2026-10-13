@@ -46,3 +46,4 @@ def build_model(role: str = "specialist") -> BaseLlm:
         # support every parameter we send - including `tools` - so agent transfers don't fail.
         extra_body={"provider": {"require_parameters": True}},
     )
+
